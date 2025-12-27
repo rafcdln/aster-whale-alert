@@ -26,10 +26,18 @@ let stats = {
     last24h: []
 };
 
-console.log('🐋 Aster Whale Alert Bot starting...');
-console.log(`📊 Tracking: ${config.asterContract}`);
-console.log(`💰 Alert threshold: $${config.minAlertUsd}`);
-console.log(`👥 Subscribers: ${subscribers.size}`);
+// Format helpers
+const fmt = {
+    k: (n) => n >= 1000 ? `${(n / 1000).toFixed(0)}K` : n.toFixed(0),
+    usd: (n) => `$${fmt.k(n)}`,
+    price: (n) => `$${n.toFixed(4)}`,
+    threshold: () => fmt.usd(config.minAlertUsd)
+};
+
+console.log('Aster Whale Alert starting...');
+console.log(`Tracking: ${config.asterContract}`);
+console.log(`Threshold: ${fmt.threshold()}`);
+console.log(`Subscribers: ${subscribers.size}`);
 
 // ==================== BOT COMMANDS ====================
 
@@ -40,22 +48,21 @@ bot.onText(/\/start/, async (msg) => {
     if (!subscribers.has(chatId)) {
         subscribers.add(chatId);
         saveSubscribers(subscribers);
-        console.log(`✅ New subscriber: ${chatId}`);
+        console.log(`+ Subscriber: ${chatId}`);
     }
 
-    const welcomeMessage = `
-🐋 *ASTER WHALE ALERT*
-━━━━━━━━━━━━━━━━━━━
+    await bot.sendMessage(chatId, `
+*ASTER WHALE ALERT*
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-✅ Inscrit aux alertes whale
+Subscribed to whale alerts.
 
-📊 *ASTER* • $${price.toFixed(4)} • BSC
-⚡ Seuil: $${(config.minAlertUsd / 1000).toFixed(0)}K+ | 👥 ${subscribers.size} abonnés
+ASTER ${fmt.price(price)} · BSC
+Threshold: ${fmt.threshold()}
+Members: ${subscribers.size}
 
-/price • /stats • /stop
-`;
-
-    await bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
+/price  /stats  /stop
+`, { parse_mode: 'Markdown' });
 });
 
 bot.onText(/\/stop/, async (msg) => {
@@ -64,10 +71,9 @@ bot.onText(/\/stop/, async (msg) => {
     if (subscribers.has(chatId)) {
         subscribers.delete(chatId);
         saveSubscribers(subscribers);
-        console.log(`❌ Unsubscribed: ${chatId}`);
-        await bot.sendMessage(chatId, '👋 Tu es désabonné des alertes. Utilise /start pour te réabonner.');
+        await bot.sendMessage(chatId, 'Unsubscribed. Use /start to resubscribe.');
     } else {
-        await bot.sendMessage(chatId, "Tu n'es pas abonné. Utilise /start pour t'abonner.");
+        await bot.sendMessage(chatId, 'Not subscribed. Use /start to subscribe.');
     }
 });
 
@@ -76,22 +82,21 @@ bot.onText(/\/stats/, async (msg) => {
     const price = await getAsterPrice();
 
     const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
-    const last24hAlerts = stats.last24h.filter(a => a.timestamp > oneDayAgo);
-    const totalVolume24h = last24hAlerts.reduce((sum, a) => sum + a.usd, 0);
+    const last24h = stats.last24h.filter(a => a.timestamp > oneDayAgo);
+    const volume24h = last24h.reduce((sum, a) => sum + a.usd, 0);
 
     let message = `
-📊 *STATISTIQUES*
-━━━━━━━━━━━━━━━━━━━
+*STATISTICS*
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-👥 *${subscribers.size}* abonnés
-🔔 *${stats.totalAlerts}* alertes totales
+Members: ${subscribers.size}
+Total alerts: ${stats.totalAlerts}
 
-*24H:* ${last24hAlerts.length} alertes • $${(totalVolume24h / 1000).toFixed(0)}K volume`;
+24H: ${last24h.length} alerts · ${fmt.usd(volume24h)} volume`;
 
     if (stats.largestBuy.tx) {
         message += `
-
-🏆 *Record:* ${(stats.largestBuy.amount / 1000).toFixed(0)}K ASTER ($${(stats.largestBuy.usd / 1000).toFixed(0)}K)`;
+Record: ${fmt.k(stats.largestBuy.amount)} ASTER (${fmt.usd(stats.largestBuy.usd)})`;
     }
 
     await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
@@ -100,14 +105,15 @@ bot.onText(/\/stats/, async (msg) => {
 bot.onText(/\/price/, async (msg) => {
     const chatId = msg.chat.id;
     const price = await getAsterPrice();
-    const mcap = (2000000000 * price / 0.70).toFixed(0);
+    const mcap = (2000000000 * price / 0.70);
 
     await bot.sendMessage(chatId, `
-💰 *ASTER* — *$${price.toFixed(4)}*
-━━━━━━━━━━━━━━━━━━━
-MCap: ~$${(mcap / 1000000000).toFixed(2)}B
+*ASTER*  ${fmt.price(price)}
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-[Chart](https://dexscreener.com/bsc/${config.asterContract}) • [BscScan](https://bscscan.com/token/${config.asterContract})
+MCap: ~$${(mcap / 1e9).toFixed(2)}B
+
+[Chart](https://dexscreener.com/bsc/${config.asterContract}) · [Explorer](https://bscscan.com/token/${config.asterContract})
 `, { parse_mode: 'Markdown', disable_web_page_preview: true });
 });
 
@@ -115,11 +121,12 @@ bot.onText(/\/threshold/, async (msg) => {
     const chatId = msg.chat.id;
 
     await bot.sendMessage(chatId, `
-⚙️ *Seuil d'alerte*
+*THRESHOLD*
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-Seuil actuel: $${config.minAlertUsd.toLocaleString()}
+Current: ${fmt.threshold()}
 
-Les achats supérieurs à ce montant déclenchent une alerte.
+Alerts trigger above this amount.
 `, { parse_mode: 'Markdown' });
 });
 
@@ -127,39 +134,30 @@ bot.onText(/\/help/, async (msg) => {
     const chatId = msg.chat.id;
 
     await bot.sendMessage(chatId, `
-🐋 *ASTER WHALE ALERT*
-━━━━━━━━━━━━━━━━━━━
+*ASTER WHALE ALERT*
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-Alertes temps réel des gros achats ASTER sur BSC.
+Real-time large ASTER buys on BSC.
 
-/start • /stop • /price • /stats
+/start · /stop · /price · /stats
 
-⚡ Seuil: $${(config.minAlertUsd / 1000).toFixed(0)}K+
+Threshold: ${fmt.threshold()}
 `, { parse_mode: 'Markdown' });
 });
 
 // ==================== WHALE MONITORING ====================
 
-/**
- * Send alert to all subscribers
- */
 async function sendAlert(transfer, price) {
     const amount = formatTokenAmount(transfer.value);
     const usdValue = amount * price;
 
-    // Skip if already alerted
-    if (recentAlerts.has(transfer.hash)) {
-        return;
-    }
+    if (recentAlerts.has(transfer.hash)) return;
     recentAlerts.add(transfer.hash);
 
-    // Keep recentAlerts limited
     if (recentAlerts.size > 1000) {
-        const first = recentAlerts.values().next().value;
-        recentAlerts.delete(first);
+        recentAlerts.delete(recentAlerts.values().next().value);
     }
 
-    // Update stats
     stats.totalAlerts++;
     stats.last24h.push({ amount, usd: usdValue, timestamp: Date.now() });
 
@@ -167,31 +165,27 @@ async function sendAlert(transfer, price) {
         stats.largestBuy = { amount, usd: usdValue, tx: transfer.hash };
     }
 
-    // Clean old stats
     const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
     stats.last24h = stats.last24h.filter(a => a.timestamp > oneDayAgo);
 
-    // Create alert message with emojis based on size
-    let sizeEmoji = '🐋';
-    let tier = '';
-    if (usdValue >= 500000) { sizeEmoji = '🚨'; tier = 'MEGA WHALE'; }
-    else if (usdValue >= 100000) { sizeEmoji = '🔥'; tier = 'WHALE'; }
-    else { sizeEmoji = '💎'; tier = 'BIG BUY'; }
+    // Tier classification
+    let tier = 'LARGE BUY';
+    if (usdValue >= 500000) tier = 'MEGA WHALE';
+    else if (usdValue >= 100000) tier = 'WHALE';
 
     const message = `
-${sizeEmoji} *${tier}* ${sizeEmoji}
-━━━━━━━━━━━━━━━━━━━
+*${tier}*
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-*${(amount / 1000).toFixed(1)}K ASTER* — *$${(usdValue / 1000).toFixed(0)}K*
+${fmt.k(amount)} ASTER · ${fmt.usd(usdValue)}
 
 \`${shortenAddress(transfer.from)}\` → \`${shortenAddress(transfer.to)}\`
 
-[Tx](${getTxLink(transfer.hash)}) • $${price.toFixed(4)}
+[View Tx](${getTxLink(transfer.hash)}) · ${fmt.price(price)}
 `;
 
-    console.log(`🐋 Alert: ${amount.toLocaleString()} ASTER ($${usdValue.toLocaleString()})`);
+    console.log(`Alert: ${fmt.k(amount)} ASTER (${fmt.usd(usdValue)})`);
 
-    // Send to all subscribers
     for (const chatId of subscribers) {
         try {
             await bot.sendMessage(chatId, message, {
@@ -200,20 +194,13 @@ ${sizeEmoji} *${tier}* ${sizeEmoji}
             });
         } catch (error) {
             if (error.response?.statusCode === 403) {
-                // User blocked the bot
                 subscribers.delete(chatId);
                 saveSubscribers(subscribers);
-                console.log(`Removed blocked user: ${chatId}`);
-            } else {
-                console.error(`Error sending to ${chatId}:`, error.message);
             }
         }
     }
 }
 
-/**
- * Check for new whale transfers
- */
 async function checkWhaleTransfers() {
     try {
         const price = await getAsterPrice();
@@ -221,65 +208,47 @@ async function checkWhaleTransfers() {
 
         let lastBlock = loadLastBlock();
 
-        // If no last block, get current block and start from there
         if (!lastBlock) {
             lastBlock = await getLatestBlock();
             if (lastBlock) {
                 saveLastBlock(lastBlock);
-                console.log(`📦 Starting from block: ${lastBlock}`);
+                console.log(`Starting from block: ${lastBlock}`);
             }
             return;
         }
 
-        // Get recent transfers
         const transfers = await getTokenTransfers(lastBlock);
 
-        if (transfers.length === 0) {
-            return;
-        }
+        if (transfers.length === 0) return;
 
-        // Update last block
         const maxBlock = Math.max(...transfers.map(t => parseInt(t.blockNumber)));
-        if (maxBlock > lastBlock) {
-            saveLastBlock(maxBlock);
-        }
+        if (maxBlock > lastBlock) saveLastBlock(maxBlock);
 
-        // Filter whale transfers (buys only - transfers TO certain addresses could indicate buys)
-        // For simplicity, we alert on all large transfers
         for (const transfer of transfers) {
             const amount = formatTokenAmount(transfer.value);
-
             if (amount >= minTokenAmount) {
                 await sendAlert(transfer, price);
             }
         }
 
     } catch (error) {
-        console.error('Error checking transfers:', error.message);
+        console.error('Error:', error.message);
     }
 }
 
-// ==================== START MONITORING ====================
+// ==================== START ====================
 
-// Initial check
-console.log('🔍 Starting whale monitoring...');
+console.log('Monitoring started...');
 checkWhaleTransfers();
-
-// Set up interval
 setInterval(checkWhaleTransfers, config.pollInterval * 1000);
+console.log(`Interval: ${config.pollInterval}s`);
 
-console.log(`⏱️ Checking every ${config.pollInterval} seconds`);
-console.log('✅ Bot is running! Press Ctrl+C to stop.');
-
-// Handle graceful shutdown
 process.on('SIGINT', () => {
-    console.log('\n👋 Shutting down...');
     saveSubscribers(subscribers);
     process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-    console.log('\n👋 Shutting down...');
     saveSubscribers(subscribers);
     process.exit(0);
 });
