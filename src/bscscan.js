@@ -2,34 +2,42 @@ import fetch from 'node-fetch';
 import { config } from './config.js';
 
 /**
- * Get ASTER token transfers from BscScan
+ * Get ASTER token transfers from Moralis API
  */
-export async function getTokenTransfers(startBlock = 0) {
-    const url = new URL(config.bscscanApi);
-    url.searchParams.set('module', 'account');
-    url.searchParams.set('action', 'tokentx');
-    url.searchParams.set('contractaddress', config.asterContract);
-    url.searchParams.set('startblock', startBlock.toString());
-    url.searchParams.set('endblock', '99999999');
-    url.searchParams.set('sort', 'desc');
-    url.searchParams.set('apikey', config.bscscanApiKey);
+export async function getTokenTransfers(cursor = null) {
+    const url = new URL('https://deep-index.moralis.io/api/v2.2/erc20/transfers');
+    url.searchParams.set('chain', 'bsc');
+    url.searchParams.set('contract_addresses', config.asterContract);
+    url.searchParams.set('limit', '100');
+    if (cursor) {
+        url.searchParams.set('cursor', cursor);
+    }
 
     try {
-        const response = await fetch(url.toString());
+        const response = await fetch(url.toString(), {
+            headers: {
+                'accept': 'application/json',
+                'X-API-Key': config.moralisApiKey
+            }
+        });
         const data = await response.json();
 
-        if (data.status === '1' && Array.isArray(data.result)) {
-            return data.result;
+        if (data.result && Array.isArray(data.result)) {
+            // Transform to match expected format
+            return data.result.map(tx => ({
+                hash: tx.transaction_hash,
+                from: tx.from_address,
+                to: tx.to_address,
+                value: tx.value,
+                blockNumber: tx.block_number,
+                timeStamp: Math.floor(new Date(tx.block_timestamp).getTime() / 1000)
+            }));
         }
 
-        if (data.message === 'No transactions found') {
-            return [];
-        }
-
-        console.warn('BscScan API warning:', data.message);
+        console.warn('Moralis API warning:', data.message || 'No data');
         return [];
     } catch (error) {
-        console.error('BscScan API error:', error.message);
+        console.error('Moralis API error:', error.message);
         return [];
     }
 }
@@ -45,14 +53,13 @@ export async function getAsterPrice() {
         const data = await response.json();
 
         if (data.pairs && data.pairs.length > 0) {
-            // Get the most liquid pair
             const price = parseFloat(data.pairs[0].priceUsd);
             if (price > 0) {
                 return price;
             }
         }
 
-        return 0.70; // Fallback
+        return 0.70;
     } catch (error) {
         console.error('Error getting price:', error.message);
         return 0.70;
@@ -63,22 +70,19 @@ export async function getAsterPrice() {
  * Get latest block number
  */
 export async function getLatestBlock() {
-    const url = new URL(config.bscscanApi);
-    url.searchParams.set('module', 'proxy');
-    url.searchParams.set('action', 'eth_blockNumber');
-    url.searchParams.set('apikey', config.bscscanApiKey);
-
     try {
-        const response = await fetch(url.toString());
+        const response = await fetch('https://deep-index.moralis.io/api/v2.2/block/latest?chain=bsc', {
+            headers: {
+                'accept': 'application/json',
+                'X-API-Key': config.moralisApiKey
+            }
+        });
         const data = await response.json();
-
-        if (data.result) {
-            return parseInt(data.result, 16);
-        }
+        return parseInt(data.block_number);
     } catch (error) {
         console.error('Error getting latest block:', error.message);
+        return null;
     }
-    return null;
 }
 
 /**
@@ -90,7 +94,6 @@ export function formatTokenAmount(value) {
     const whole = amount / decimals;
     const fraction = amount % decimals;
 
-    // Format with 2 decimal places
     const fractionStr = fraction.toString().padStart(config.asterDecimals, '0').slice(0, 2);
     return parseFloat(`${whole}.${fractionStr}`);
 }

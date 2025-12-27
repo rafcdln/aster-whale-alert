@@ -1,10 +1,9 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { config } from './config.js';
-import { loadSubscribers, saveSubscribers, loadLastBlock, saveLastBlock } from './storage.js';
+import { loadSubscribers, saveSubscribers } from './storage.js';
 import {
     getTokenTransfers,
     getAsterPrice,
-    getLatestBlock,
     formatTokenAmount,
     getTxLink,
     shortenAddress
@@ -113,7 +112,7 @@ bot.onText(/\/price/, async (msg) => {
 
 MCap: ~$${(mcap / 1e9).toFixed(2)}B
 
-[Chart](https://dexscreener.com/bsc/${config.asterContract}) · [Explorer](https://bscscan.com/token/${config.asterContract})
+[Chart](https://coinmarketcap.com/currencies/aster/) · [Explorer](https://bscscan.com/token/${config.asterContract})
 `, { parse_mode: 'Markdown', disable_web_page_preview: true });
 });
 
@@ -206,25 +205,16 @@ async function checkWhaleTransfers() {
         const price = await getAsterPrice();
         const minTokenAmount = config.minAlertUsd / price;
 
-        let lastBlock = loadLastBlock();
-
-        if (!lastBlock) {
-            lastBlock = await getLatestBlock();
-            if (lastBlock) {
-                saveLastBlock(lastBlock);
-                console.log(`Starting from block: ${lastBlock}`);
-            }
-            return;
-        }
-
-        const transfers = await getTokenTransfers(lastBlock);
+        // Get recent transfers
+        const transfers = await getTokenTransfers();
 
         if (transfers.length === 0) return;
 
-        const maxBlock = Math.max(...transfers.map(t => parseInt(t.blockNumber)));
-        if (maxBlock > lastBlock) saveLastBlock(maxBlock);
+        // Only process transfers from last 2 minutes to avoid duplicates
+        const twoMinutesAgo = Math.floor(Date.now() / 1000) - 120;
+        const recentTransfers = transfers.filter(t => t.timeStamp > twoMinutesAgo);
 
-        for (const transfer of transfers) {
+        for (const transfer of recentTransfers) {
             const amount = formatTokenAmount(transfer.value);
             if (amount >= minTokenAmount) {
                 await sendAlert(transfer, price);
