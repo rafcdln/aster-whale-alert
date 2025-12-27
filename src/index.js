@@ -35,6 +35,7 @@ console.log(`👥 Subscribers: ${subscribers.size}`);
 
 bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id;
+    const price = await getAsterPrice();
 
     if (!subscribers.has(chatId)) {
         subscribers.add(chatId);
@@ -43,25 +44,15 @@ bot.onText(/\/start/, async (msg) => {
     }
 
     const welcomeMessage = `
-🐋 *Aster Whale Alert* 🐋
+🐋 *ASTER WHALE ALERT*
+━━━━━━━━━━━━━━━━━━━
 
-Bienvenue ! Tu es maintenant abonné aux alertes de gros achats d'ASTER.
+✅ Inscrit aux alertes whale
 
-📊 *Infos actuelles:*
-• Token: ASTER
-• Réseau: BSC (BNB Chain)
-• Seuil d'alerte: $${config.minAlertUsd.toLocaleString()}+
-• Abonnés: ${subscribers.size}
+📊 *ASTER* • $${price.toFixed(4)} • BSC
+⚡ Seuil: $${(config.minAlertUsd / 1000).toFixed(0)}K+ | 👥 ${subscribers.size} abonnés
 
-*Commandes disponibles:*
-/start - S'abonner aux alertes
-/stop - Se désabonner
-/stats - Voir les statistiques
-/price - Prix actuel d'ASTER
-/threshold - Seuil d'alerte actuel
-/help - Aide
-
-🔔 Tu recevras une notification à chaque gros achat !
+/price • /stats • /stop
 `;
 
     await bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
@@ -82,32 +73,25 @@ bot.onText(/\/stop/, async (msg) => {
 
 bot.onText(/\/stats/, async (msg) => {
     const chatId = msg.chat.id;
-
     const price = await getAsterPrice();
 
-    // Filter last 24h alerts
     const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
     const last24hAlerts = stats.last24h.filter(a => a.timestamp > oneDayAgo);
-
     const totalVolume24h = last24hAlerts.reduce((sum, a) => sum + a.usd, 0);
 
     let message = `
-📊 *Statistiques Aster Whale Alert*
+📊 *STATISTIQUES*
+━━━━━━━━━━━━━━━━━━━
 
-👥 Abonnés: ${subscribers.size}
-🔔 Alertes totales: ${stats.totalAlerts}
+👥 *${subscribers.size}* abonnés
+🔔 *${stats.totalAlerts}* alertes totales
 
-*Dernières 24h:*
-• Alertes: ${last24hAlerts.length}
-• Volume détecté: $${totalVolume24h.toLocaleString()}
-`;
+*24H:* ${last24hAlerts.length} alertes • $${(totalVolume24h / 1000).toFixed(0)}K volume`;
 
     if (stats.largestBuy.tx) {
         message += `
-🏆 *Plus gros achat détecté:*
-• ${stats.largestBuy.amount.toLocaleString()} ASTER
-• $${stats.largestBuy.usd.toLocaleString()}
-`;
+
+🏆 *Record:* ${(stats.largestBuy.amount / 1000).toFixed(0)}K ASTER ($${(stats.largestBuy.usd / 1000).toFixed(0)}K)`;
     }
 
     await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
@@ -116,14 +100,14 @@ bot.onText(/\/stats/, async (msg) => {
 bot.onText(/\/price/, async (msg) => {
     const chatId = msg.chat.id;
     const price = await getAsterPrice();
+    const mcap = (2000000000 * price / 0.70).toFixed(0);
 
     await bot.sendMessage(chatId, `
-💰 *Prix ASTER*
+💰 *ASTER* — *$${price.toFixed(4)}*
+━━━━━━━━━━━━━━━━━━━
+MCap: ~$${(mcap / 1000000000).toFixed(2)}B
 
-Prix actuel: $${price.toFixed(4)}
-Market Cap: ~$2B
-
-🔗 [Voir sur BscScan](https://bscscan.com/token/${config.asterContract})
+[Chart](https://dexscreener.com/bsc/${config.asterContract}) • [BscScan](https://bscscan.com/token/${config.asterContract})
 `, { parse_mode: 'Markdown', disable_web_page_preview: true });
 });
 
@@ -143,22 +127,14 @@ bot.onText(/\/help/, async (msg) => {
     const chatId = msg.chat.id;
 
     await bot.sendMessage(chatId, `
-🐋 *Aster Whale Alert - Aide*
+🐋 *ASTER WHALE ALERT*
+━━━━━━━━━━━━━━━━━━━
 
-Ce bot surveille les gros achats du token ASTER sur la BSC (BNB Chain) et envoie des alertes en temps réel.
+Alertes temps réel des gros achats ASTER sur BSC.
 
-*Commandes:*
-/start - S'abonner aux alertes
-/stop - Se désabonner
-/stats - Statistiques des alertes
-/price - Prix actuel d'ASTER
-/threshold - Seuil d'alerte
-/help - Cette aide
+/start • /stop • /price • /stats
 
-*Comment ça marche:*
-Le bot surveille les transferts du token ASTER. Quand un achat dépasse $${config.minAlertUsd.toLocaleString()}, tous les abonnés reçoivent une notification avec les détails.
-
-📱 Partage ce bot: @AsterWhaleAlertBot
+⚡ Seuil: $${(config.minAlertUsd / 1000).toFixed(0)}K+
 `, { parse_mode: 'Markdown' });
 });
 
@@ -197,22 +173,20 @@ async function sendAlert(transfer, price) {
 
     // Create alert message with emojis based on size
     let sizeEmoji = '🐋';
-    if (usdValue >= 100000) sizeEmoji = '🚨🐋🚨';
-    else if (usdValue >= 50000) sizeEmoji = '🔥🐋🔥';
-    else if (usdValue >= 20000) sizeEmoji = '💎🐋';
+    let tier = '';
+    if (usdValue >= 500000) { sizeEmoji = '🚨'; tier = 'MEGA WHALE'; }
+    else if (usdValue >= 100000) { sizeEmoji = '🔥'; tier = 'WHALE'; }
+    else { sizeEmoji = '💎'; tier = 'BIG BUY'; }
 
     const message = `
-${sizeEmoji} *GROS ACHAT ASTER DÉTECTÉ* ${sizeEmoji}
+${sizeEmoji} *${tier}* ${sizeEmoji}
+━━━━━━━━━━━━━━━━━━━
 
-💰 *Montant:* ${amount.toLocaleString()} ASTER
-💵 *Valeur:* $${usdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+*${(amount / 1000).toFixed(1)}K ASTER* — *$${(usdValue / 1000).toFixed(0)}K*
 
-👤 *De:* \`${shortenAddress(transfer.from)}\`
-👤 *Vers:* \`${shortenAddress(transfer.to)}\`
+\`${shortenAddress(transfer.from)}\` → \`${shortenAddress(transfer.to)}\`
 
-🔗 [Voir la transaction](${getTxLink(transfer.hash)})
-
-⏰ ${new Date().toLocaleString('fr-FR')}
+[Tx](${getTxLink(transfer.hash)}) • $${price.toFixed(4)}
 `;
 
     console.log(`🐋 Alert: ${amount.toLocaleString()} ASTER ($${usdValue.toLocaleString()})`);

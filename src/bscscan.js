@@ -35,20 +35,27 @@ export async function getTokenTransfers(startBlock = 0) {
 }
 
 /**
- * Get current ASTER price from DEX (PancakeSwap)
- * Uses BNB price as intermediate
+ * Get current ASTER price from DexScreener
  */
 export async function getAsterPrice() {
     try {
-        // Try to get price from CoinGecko or similar
-        // For now, use a fallback price
-        // You can integrate with DEX APIs later
+        const response = await fetch(
+            `https://api.dexscreener.com/latest/dex/tokens/${config.asterContract}`
+        );
+        const data = await response.json();
 
-        // Fallback to ~$0.70 as mentioned by user
-        return 0.70;
+        if (data.pairs && data.pairs.length > 0) {
+            // Get the most liquid pair
+            const price = parseFloat(data.pairs[0].priceUsd);
+            if (price > 0) {
+                return price;
+            }
+        }
+
+        return 0.70; // Fallback
     } catch (error) {
         console.error('Error getting price:', error.message);
-        return 0.70; // Fallback price
+        return 0.70;
     }
 }
 
