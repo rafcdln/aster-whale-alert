@@ -168,10 +168,10 @@ async function sendAlert(transfer, price) {
     const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
     stats.last24h = stats.last24h.filter(a => a.timestamp > oneDayAgo);
 
-    // Tier classification
+    // Tier classification (based on threshold multiples)
     let tier = 'LARGE BUY';
-    if (usdValue >= 500000) tier = 'MEGA WHALE';
-    else if (usdValue >= 100000) tier = 'WHALE';
+    if (usdValue >= config.minAlertUsd * 10) tier = 'MEGA WHALE';
+    else if (usdValue >= config.minAlertUsd * 2) tier = 'WHALE';
 
     const message = `
 *${tier}*
