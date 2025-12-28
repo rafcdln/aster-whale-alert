@@ -4,17 +4,11 @@ import { config } from './config.js';
 /**
  * Get ASTER token transfers from Moralis API
  */
-export async function getTokenTransfers(cursor = null) {
-    const url = new URL('https://deep-index.moralis.io/api/v2.2/erc20/transfers');
-    url.searchParams.set('chain', 'bsc');
-    url.searchParams.set('contract_addresses', config.asterContract);
-    url.searchParams.set('limit', '100');
-    if (cursor) {
-        url.searchParams.set('cursor', cursor);
-    }
+export async function getTokenTransfers() {
+    const url = `https://deep-index.moralis.io/api/v2.2/erc20/${config.asterContract}/transfers?chain=bsc&limit=100&order=DESC`;
 
     try {
-        const response = await fetch(url.toString(), {
+        const response = await fetch(url, {
             headers: {
                 'accept': 'application/json',
                 'X-API-Key': config.moralisApiKey
@@ -23,7 +17,6 @@ export async function getTokenTransfers(cursor = null) {
         const data = await response.json();
 
         if (data.result && Array.isArray(data.result)) {
-            // Transform to match expected format
             return data.result.map(tx => ({
                 hash: tx.transaction_hash,
                 from: tx.from_address,
@@ -34,7 +27,9 @@ export async function getTokenTransfers(cursor = null) {
             }));
         }
 
-        console.warn('Moralis API warning:', data.message || 'No data');
+        if (data.message) {
+            console.warn('Moralis API warning:', data.message);
+        }
         return [];
     } catch (error) {
         console.error('Moralis API error:', error.message);
@@ -67,25 +62,6 @@ export async function getAsterPrice() {
 }
 
 /**
- * Get latest block number
- */
-export async function getLatestBlock() {
-    try {
-        const response = await fetch('https://deep-index.moralis.io/api/v2.2/block/latest?chain=bsc', {
-            headers: {
-                'accept': 'application/json',
-                'X-API-Key': config.moralisApiKey
-            }
-        });
-        const data = await response.json();
-        return parseInt(data.block_number);
-    } catch (error) {
-        console.error('Error getting latest block:', error.message);
-        return null;
-    }
-}
-
-/**
  * Format token amount from wei
  */
 export function formatTokenAmount(value) {
@@ -103,13 +79,6 @@ export function formatTokenAmount(value) {
  */
 export function getTxLink(hash) {
     return `https://bscscan.com/tx/${hash}`;
-}
-
-/**
- * Get address link
- */
-export function getAddressLink(address) {
-    return `https://bscscan.com/address/${address}`;
 }
 
 /**
